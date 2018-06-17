@@ -182,13 +182,13 @@ struct transition state_transitions[] = {
 
 enum state_code lookup_transition(enum state_code state_code, enum input input) {
 	#ifdef TEST
-	volatile enum state_code new_state = state_code;
-	volatile unsigned char transition_index = 0;
-	volatile unsigned int num_transitions = sizeof(state_transitions) / sizeof(transition);
+		volatile enum state_code new_state = state_code;
+		volatile unsigned char transition_index = 0;
+		volatile unsigned int num_transitions = sizeof(state_transitions) / sizeof(transition);
 	#else
-	enum state_code new_state = state_code;
-	unsigned char transition_index = 0;
-	unsigned int num_transitions = sizeof(state_transitions) / sizeof(transition);
+		enum state_code new_state = state_code;
+		unsigned char transition_index = 0;
+		unsigned int num_transitions = sizeof(state_transitions) / sizeof(transition);
 	#endif
 	
 	for (transition_index=0; transition_index < num_transitions; transition_index++) {
@@ -206,11 +206,11 @@ enum state_code lookup_transition(enum state_code state_code, enum input input) 
 
 int main() {
 	#ifdef TEST
-	volatile enum state_code cur_state = entry;
-	volatile enum input input;
+		volatile enum state_code cur_state = entry;
+		volatile enum input input;
 	#else
-	enum state_code cur_state = entry;
-	enum input input;
+		enum state_code cur_state = entry;
+		enum input input;
 	#endif
 	
 	void (* state_func)(void);
