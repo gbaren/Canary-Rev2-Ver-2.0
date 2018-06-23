@@ -14,7 +14,7 @@
 #define LED_ORANGE	(99)
 #define SW0			(PB2)			// configuration switch
 #define PSW			(PB3)			// mobo power switch (active-low)
-#define HDLED		(PB4)			// HDLED from mobo
+#define HDLED		(PB4)			// HDLED input from mobo
 
 #define clrbit(reg,bit)	((reg) &= ~(1 << (bit)))
 #define setbit(reg,bit)	((reg) |=  (1 << (bit)))

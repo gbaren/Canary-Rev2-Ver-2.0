@@ -25,7 +25,7 @@ input in = none;
 void delay_ms(unsigned long ms)
 {
 	while(ms--)
-	_delay_ms(1);
+		_delay_ms(1);
 }
 
 void blink_canary(unsigned char color, unsigned char times, unsigned int delay) {
@@ -108,13 +108,13 @@ void state_entry(void) {
 }
 
 void state_run(void) {
-	int timeout_fifths = (int)((float)wdt_counter / get_timeout() / .2) + 1;
+	int timeout_fifths = (int)((float)wdt_counter / get_timeout() / .2);
 	blink_canary(LED_ORANGE,timeout_fifths,FLASH_DELAY_SHORT_MS);
 	timeout_state = RUNNING;
 }
 
-void state_led_flashed() {
-	blink_canary(LED_GREEN,1,FLASH_DELAY_SHORT_MS);
+void state_led_active() {
+	blink_canary(LED_GREEN,1,FLASH_DELAY_BLINK_MS);
 	wdt_counter = 0;
 }
 
@@ -150,7 +150,7 @@ enum input wait_for_interrupt() {
 	return (in);
 }
 
-void (* state[])(void) = {state_entry,state_run,state_led_flashed,state_mobo_off,state_reset_wait,state_mobo_on};
+void (* state[])(void) = {state_entry,state_run,state_led_active,state_mobo_off,state_reset_wait,state_mobo_on};
 enum state_code {entry,run,hdled_act,mobo_off,reset_wait,mobo_on};
 
 struct transition {
