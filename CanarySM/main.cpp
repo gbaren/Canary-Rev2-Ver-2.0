@@ -9,7 +9,7 @@
 
 #include "canary.h"
 
-enum input {flash, timeout, none};
+enum input {hdled, timeout, none};
 input in = none;
 
 #ifdef TEST
@@ -76,7 +76,9 @@ unsigned int get_timeout() {
 
 ISR(PCINT0_vect) {
 	cli();
-	in = flash;
+	blink_canary(LED_GREEN,1,FLASH_DELAY_BLINK_MS);
+	wdt_counter = 0;
+	in = hdled;
 	timeout_state = RUNNING;
 }
 
@@ -86,7 +88,7 @@ ISR(WDT_vect) {
 	wdt_counter++;
 	if (wdt_counter > get_timeout()) {
 		in = timeout;
-		} else {
+	} else {
 		in = none;
 	}
 }
@@ -111,11 +113,6 @@ void state_run(void) {
 	int timeout_fifths = (int)((float)wdt_counter / get_timeout() / .2);
 	blink_canary(LED_ORANGE,timeout_fifths,FLASH_DELAY_SHORT_MS);
 	timeout_state = RUNNING;
-}
-
-void state_led_active() {
-	blink_canary(LED_GREEN,1,FLASH_DELAY_BLINK_MS);
-	wdt_counter = 0;
 }
 
 void state_mobo_off(void) {
@@ -150,8 +147,8 @@ enum input wait_for_interrupt() {
 	return (in);
 }
 
-void (* state[])(void) = {state_entry,state_run,state_led_active,state_mobo_off,state_reset_wait,state_mobo_on};
-enum state_code {entry,run,hdled_act,mobo_off,reset_wait,mobo_on};
+void (* state[])(void) = {state_entry,state_run,state_mobo_off,state_reset_wait,state_mobo_on};
+enum state_code {entry,run,mobo_off,reset_wait,mobo_on};
 
 struct transition {
 	enum state_code state;
@@ -160,22 +157,19 @@ struct transition {
 };
 
 struct transition state_transitions[] = {
-	{entry,			flash,		run},
+	{entry,			hdled,		run},
 	{entry,			timeout,	run},
 	{entry,			none,		run},
-	{run,			flash,		hdled_act},
+	{run,			hdled,		run},
 	{run,			timeout,	mobo_off},
 	{run,			none,		run},
-	{hdled_act,		flash,		run},
-	{hdled_act,		timeout,	run},
-	{hdled_act,		none,		run},
-	{mobo_off,		flash,		reset_wait},
+	{mobo_off,		hdled,		run},
 	{mobo_off,		timeout,	reset_wait},
 	{mobo_off,		none,		reset_wait},
-	{reset_wait,	flash,		run},
+	{reset_wait,	hdled,		run},
 	{reset_wait,	timeout,	mobo_on},
 	{reset_wait,	none,		reset_wait},
-	{mobo_on,		flash,		run},
+	{mobo_on,		hdled,		run},
 	{mobo_on,		timeout,	run},
 	{mobo_on,		none,		run}
 };
