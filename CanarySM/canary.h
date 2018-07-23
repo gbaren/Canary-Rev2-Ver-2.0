@@ -47,6 +47,7 @@
 #define led_green_off()		(setbit(PORTB,LED_GREEN))
 #define led_red_on()		(clrbit(PORTB,LED_RED))
 #define led_red_off()		(setbit(PORTB,LED_RED))
+#define led_off()			(PORTB |= 0b00000011) 
 
 #define STATE_START			1
 #define STATE_WAIT			2

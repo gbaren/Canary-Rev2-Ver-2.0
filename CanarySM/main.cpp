@@ -9,8 +9,8 @@
 
 #include "canary.h"
 
-enum input {flash, timeout, none};
-input in = none;
+enum input_enum {hdled, timeout, none};
+enum input_enum input = none;
 
 #ifdef TEST
 	volatile unsigned int wdt_counter = 0;
@@ -29,8 +29,7 @@ void delay_ms(unsigned long ms)
 }
 
 void blink_canary(unsigned char color, unsigned char times, unsigned int delay) {
-	led_green_off();
-	led_red_off();
+	led_off();
 	for (int i=0; i<times; i++) {
 		switch (color) {
 			case LED_GREEN :
@@ -45,8 +44,7 @@ void blink_canary(unsigned char color, unsigned char times, unsigned int delay) 
 				break;
 		}
 		delay_ms(delay);
-		led_green_off();
-		led_red_off();
+		led_off();
 		delay_ms(delay);
 	}
 }
@@ -76,7 +74,9 @@ unsigned int get_timeout() {
 
 ISR(PCINT0_vect) {
 	cli();
-	in = flash;
+	blink_canary(LED_GREEN,1,FLASH_DELAY_BLINK_MS);
+	wdt_counter = 0;
+	input = hdled;
 	timeout_state = RUNNING;
 }
 
@@ -85,9 +85,9 @@ ISR(WDT_vect) {
 	setbit(WDTCR, WDIE);	// this keeps us from resetting the micro
 	wdt_counter++;
 	if (wdt_counter > get_timeout()) {
-		in = timeout;
-		} else {
-		in = none;
+		input = timeout;
+	} else {
+		input = none;
 	}
 }
 
@@ -113,11 +113,6 @@ void state_run(void) {
 	timeout_state = RUNNING;
 }
 
-void state_led_active() {
-	blink_canary(LED_GREEN,1,FLASH_DELAY_BLINK_MS);
-	wdt_counter = 0;
-}
-
 void state_mobo_off(void) {
 	blink_canary(LED_RED,3,FLASH_DELAY_LONG_MS);
 	mobo_reset_on();
@@ -141,64 +136,77 @@ void state_mobo_on(void) {
 	timeout_state = RUNNING;
 }
 
-enum input wait_for_interrupt() {
+void wait_for_interrupt() {
 	MCUCR |= SLEEP_MODE_PWR_DOWN;	// set sleep mode
 	setbit(MCUCR,SE);				// sleep enable bit
 	sei();							// enable interrupts
 	sleep_cpu();					// sleep
 	clrbit(MCUCR,SE);				// sleep disable
-	return (in);
 }
 
-void (* state[])(void) = {state_entry,state_run,state_led_active,state_mobo_off,state_reset_wait,state_mobo_on};
-enum state_code {entry,run,hdled_act,mobo_off,reset_wait,mobo_on};
+/* state description
 
+	entry:		setup after hardware reset
+	run:		normal operation
+	mobo_off:	perform motherboard shut down
+	reset_wait:	waiting for LED activity in case motherboard shutdown was performed while motherboard was off
+	mobo_on:	perform motherboard on 
+	
+*/
+
+void (* state[])(void) = {state_entry,state_run,state_mobo_off,state_reset_wait,state_mobo_on};
+enum state_code {STATE_ENTRY,STATE_RUN,STATE_MOBO_OFF,STATE_RESET_WAIT,STATE_MOBO_ON};
+
+
+/* 
+	An input received while in a particular state defines a transition to a new state
+*/
 struct transition {
 	enum state_code state;
-	enum input		input;
+	enum input_enum	input;
 	enum state_code new_state;
 };
 
+/*
+	this table defines the transition matrix documented in the diagram
+*/
 struct transition state_transitions[] = {
-	{entry,			flash,		run},
-	{entry,			timeout,	run},
-	{entry,			none,		run},
-	{run,			flash,		hdled_act},
-	{run,			timeout,	mobo_off},
-	{run,			none,		run},
-	{hdled_act,		flash,		run},
-	{hdled_act,		timeout,	run},
-	{hdled_act,		none,		run},
-	{mobo_off,		flash,		reset_wait},
-	{mobo_off,		timeout,	reset_wait},
-	{mobo_off,		none,		reset_wait},
-	{reset_wait,	flash,		run},
-	{reset_wait,	timeout,	mobo_on},
-	{reset_wait,	none,		reset_wait},
-	{mobo_on,		flash,		run},
-	{mobo_on,		timeout,	run},
-	{mobo_on,		none,		run}
+	{STATE_ENTRY,		hdled,		STATE_RUN},
+	{STATE_ENTRY,		timeout,	STATE_RUN},
+	{STATE_ENTRY,		none,		STATE_RUN},
+	{STATE_RUN,			hdled,		STATE_RUN},
+	{STATE_RUN,			timeout,	STATE_MOBO_OFF},
+	{STATE_RUN,			none,		STATE_RUN},
+	{STATE_MOBO_OFF,	hdled,		STATE_RUN},
+	{STATE_MOBO_OFF,	timeout,	STATE_RESET_WAIT},
+	{STATE_MOBO_OFF,	none,		STATE_RESET_WAIT},
+	{STATE_RESET_WAIT,	hdled,		STATE_RUN},
+	{STATE_RESET_WAIT,	timeout,	STATE_MOBO_ON},
+	{STATE_RESET_WAIT,	none,		STATE_RESET_WAIT},
+	{STATE_MOBO_ON,		hdled,		STATE_RUN},
+	{STATE_MOBO_ON,		timeout,	STATE_RUN},
+	{STATE_MOBO_ON,		none,		STATE_RUN}
 };
 
-enum state_code lookup_transition(enum state_code state_code, enum input input) {
+enum state_code lookup_transition(enum state_code state_code, enum input_enum input) {
 	#ifdef TEST
 		volatile enum state_code new_state = state_code;
-		volatile unsigned char transition_index = 0;
-		volatile unsigned int num_transitions = sizeof(state_transitions) / sizeof(transition);
+		volatile unsigned char i = 0;
+		volatile unsigned int n = sizeof(state_transitions) / sizeof(transition);
 	#else
 		enum state_code new_state = state_code;
-		unsigned char transition_index = 0;
-		unsigned int num_transitions = sizeof(state_transitions) / sizeof(transition);
+		unsigned char i = 0;
+		unsigned int n = sizeof(state_transitions) / sizeof(transition);
 	#endif
 	
-	for (transition_index=0; transition_index < num_transitions; transition_index++) {
-		if ((state_transitions[transition_index].state == state_code) && (state_transitions[transition_index].input == input)) break;
+	for (i=0; i < n; i++) {
+		if ((state_transitions[i].state == state_code) && (state_transitions[i].input == input)) break;
 	}
 	
-	if (transition_index > num_transitions) {
+	if (i > n) {
 		new_state = state_code;
 		} else {
-		new_state = state_transitions[transition_index].new_state;
+		new_state = state_transitions[i].new_state;
 	}
 
 	return (new_state);
@@ -206,11 +214,9 @@ enum state_code lookup_transition(enum state_code state_code, enum input input) 
 
 int main() {
 	#ifdef TEST
-		volatile enum state_code cur_state = entry;
-		volatile enum input input;
+		volatile enum state_code cur_state = STATE_ENTRY;
 	#else
-		enum state_code cur_state = entry;
-		enum input input;
+		enum state_code cur_state = STATE_ENTRY;
 	#endif
 	
 	void (* state_func)(void);
@@ -218,7 +224,7 @@ int main() {
 	while (1) {
 		state_func = state[cur_state];
 		state_func();
-		input = wait_for_interrupt();
+		wait_for_interrupt();
 		cur_state = lookup_transition(cur_state,input);
 	}
 }
